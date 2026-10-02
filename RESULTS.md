@@ -18,6 +18,11 @@ Instruction counts, one scalar `min`, hand-written IR:
 `f64` and `max` match `f32` and `min`. Vector form `<8 x float>`: 4 → 6 on AVX2,
 5 → 8 on `skylake-avx512`, 2 → 2 on AVX10.2.
 
+On aarch64 the two variants are the same assembly, instruction for instruction,
+on `generic`, `neoverse-n1` and `apple-m1`: `f32` and `f64` 4 each, `<8 x float>`
+7, `max` 4. `fminnm` already orders signed zeros, so `nsz` changes nothing
+there and the cost above is specific to x86.
+
 Wall-clock, Xeon E5-2686 v4 (Broadwell-EP), pinned to one core, n = 16384
 (L2-resident), 21 repeats, ratio = deterministic / `nsz`:
 
