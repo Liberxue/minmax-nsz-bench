@@ -1,0 +1,27 @@
+# Cargo covers the self-contained tools only, so that clippy and a plain
+# `cargo build` work on them. The two-variant measurement does not go through
+# Cargo: it needs `nsz` stripped from one copy of the IR and both copies put
+# through one chosen `llc`, which is what bench.sh and perf.sh do with rustc
+# directly. src/kernels.rs, src/bench.rs and src/perfone.rs belong to that path
+# and are not listed here.
+[package]
+name = "minmax-nsz-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "cand"
+path = "src/cand.rs"
+
+[[bin]]
+name = "verify_fixup"
+path = "src/verify_fixup.rs"
+
+[[bin]]
+name = "fastpath_reduce"
+path = "src/fastpath_reduce.rs"
+
+[profile.release]
+opt-level = 3
+debug = false

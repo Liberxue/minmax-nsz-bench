@@ -10,17 +10,19 @@ fn red_now(xs: &[f32]) -> f32 { xs.iter().copied().fold(f32::INFINITY, f32::min)
 #[inline(never)]
 #[target_feature(enable = "avx")]
 unsafe fn red_fast(xs: &[f32]) -> f32 {
-    let mut acc = _mm256_set1_ps(f32::INFINITY);
-    let chunks = xs.len() / 8;
-    for i in 0..chunks {
-        let v = _mm256_loadu_ps(xs.as_ptr().add(i * 8));
-        acc = _mm256_min_ps(acc, v);
+    unsafe {
+        let mut acc = _mm256_set1_ps(f32::INFINITY);
+        let chunks = xs.len() / 8;
+        for i in 0..chunks {
+            let v = _mm256_loadu_ps(xs.as_ptr().add(i * 8));
+            acc = _mm256_min_ps(acc, v);
+        }
+        let mut buf = [0f32; 8];
+        _mm256_storeu_ps(buf.as_mut_ptr(), acc);
+        let mut m = buf.iter().copied().fold(f32::INFINITY, |a, b| if a < b { a } else { b });
+        for &x in &xs[chunks * 8..] { if x < m { m = x; } }
+        m
     }
-    let mut buf = [0f32; 8];
-    _mm256_storeu_ps(buf.as_mut_ptr(), acc);
-    let mut m = buf.iter().copied().fold(f32::INFINITY, |a, b| if a < b { a } else { b });
-    for &x in &xs[chunks * 8..] { if x < m { m = x; } }
-    m
 }
 const REP: usize = 15;
 fn stats<F: FnMut()>(mut f: F, it: u32) -> f64 {

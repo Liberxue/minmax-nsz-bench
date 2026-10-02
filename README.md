@@ -34,16 +34,64 @@ Columns are `nsz`, deterministic, and the level. Two standalone checks:
     rustc -O -o build/verify src/verify_fixup.rs && ./build/verify
     rustc -O -C target-cpu=x86-64-v3 -o build/fastpath src/fastpath_reduce.rs && ./build/fastpath
 
+Those two, and `cand` below, are also the only self-contained programs here, so
+Cargo covers them and nothing else:
+
+    cargo clippy --release
+    cargo run --release --bin verify_fixup
+
+`src/kernels.rs`, `src/bench.rs` and `src/perfone.rs` stay outside Cargo. They
+need `nsz` stripped from one copy of the IR and both copies put through one
+chosen `llc`, which is the whole point of the A/B and is what the scripts do.
+Everything builds on edition 2024; moving `kernels.rs` to it changed
+`#[no_mangle]` to `#[unsafe(no_mangle)]` and left the emitted IR byte-identical.
+
 `verify_fixup` checks a source-level zero fixup against a reference
 minimumNumber over special values, random bit patterns and a semi-exhaustive
 sweep. `fastpath_reduce` asks the opposite question: today's lowering against a
 single `_mm256_min_ps` reduction.
+
+## Hardware counters
+
+Where the cost goes, and whether a cheaper sequence exists:
+
+    LLC=/usr/local/opt/llvm/bin/llc CORE=11 ./perf.sh
+
+Needs a PMU, so it does not run on a GitHub Actions runner. Where
+`perf_event_paranoid` is above 2, perf runs under sudo; the script assumes
+`sudo -n` works. Pick an idle core with `mpstat -P ALL 1 1`, since the port
+counts are per vector but the cycle counts are not.
+
+The script covers two things. `src/perfone.rs` runs one kernel of one variant in
+a loop, so the counters belong to that kernel alone rather than to a process
+that ran all of them. `src/cand.rs` holds candidate lowerings for
+minimumNumber with deterministic signed zeros, verified both lane-wise and over
+whole reductions:
+
+    rustc -O -C target-cpu=x86-64-v3 -o build/cand src/cand.rs && ./build/cand verify
+
+Where no PMU is available, `./build/cand time 16384` times the same candidates
+instead, by repeat-minimum.
+
+Three of the candidates are there because they fail, each on a negatively signed
+NaN. `verify` prints the mismatch count for every one.
 
 To measure on another machine, build the objects for its triple and link there:
 
     LLC=/usr/local/opt/llvm/bin/llc ./bench.sh x86-64-v3 x86_64-unknown-linux-gnu
     scp build/nsz.o build/det.o src/bench.rs host:
     ssh host 'rustc -O -C target-cpu=x86-64-v3 -C link-arg=nsz.o -C link-arg=det.o -o bench bench.rs && ./bench 16384'
+
+That path needs the target's rustc to agree with the local one. Where it does
+not, emit the IR on the target and bring it back for codegen, which keeps both
+variants on one `llc`:
+
+    ssh host 'cd repo && rustc -O --emit llvm-ir -C target-cpu=x86-64-v3 -o build/k.ll src/kernels.rs'
+    scp host:repo/build/k.ll build/
+    sed -E 's/ nocreateundeforpoison//g' build/k.ll | sed -E 's/@k_/@nsz_/g' > build/nsz.ll
+    sed -E 's/ nocreateundeforpoison//g' build/k.ll | sed -E 's/call nsz /call /g; s/@k_/@det_/g' > build/det.ll
+    for v in nsz det; do $LLC -mtriple=x86_64-unknown-linux-gnu -mcpu=x86-64-v3 -O3 -filetype=obj build/$v.ll -o build/$v.o; done
+    scp build/nsz.o build/det.o host:repo/build/ && ssh host 'cd repo && PREBUILT=1 ./perf.sh'
 
 ## Two traps
 

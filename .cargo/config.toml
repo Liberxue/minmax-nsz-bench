@@ -1,0 +1,4 @@
+# The candidates are AVX2 sequences and the point is their codegen, so the
+# whole crate is built for the same level the measurements use.
+[build]
+rustflags = ["-C", "target-cpu=x86-64-v3"]
