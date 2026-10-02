@@ -48,6 +48,12 @@ Same machine, f32, by working-set size:
 i7-8559U (Coffee Lake), same sweep: reduce 1.38–2.05, scalar chain 1.35–1.83,
 elementwise 1.04–1.42, clamp 0.79–1.02.
 
+A GitHub Actions runner (Ubuntu 26.04, LLVM 21.1.8, not pinned to a core) gives
+reduce 1.663, scalar chain 1.683, elementwise 1.003, clamp 1.008, and for `f64`
+1.557, 1.543, 1.054, at the same n. Same shape, lower on a newer part than on
+the 2016 Broadwell above. The workflow in this repo recomputes it on each push,
+and reproduces the instruction counts exactly.
+
 With one element in eight set to `±0.0`, the ratios move by about 10%, in both
 directions.
 

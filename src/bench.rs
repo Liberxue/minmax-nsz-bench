@@ -61,7 +61,7 @@ fn main() {
     let (p6, q6, r6) = (a6.as_ptr(), b6.as_ptr(), o6.as_mut_ptr());
 
     println!("n={n} rep={REP} zeros={zeros}");
-    let mut out = |name: &str, x: (f64, f64), y: (f64, f64)| {
+    let out = |name: &str, x: (f64, f64), y: (f64, f64)| {
         println!("{name:<16}{:.3}\t{:.3}\t{:.3}", y.0 / x.0, y.1 / x.1, x.1 / x.0);
     };
     out("reduce",

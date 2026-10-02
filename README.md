@@ -1,4 +1,5 @@
-What dropping `nsz` from `f32::min` lowering costs on x86 (rust-lang/rust#154061).
+What dropping `nsz` from `f32::min` lowering costs, on x86 and on aarch64
+(rust-lang/rust#154061).
 
 Both variants come from the same rustc-emitted IR, one as emitted, one with `nsz`
 stripped off the `minimumnum` / `vector.reduce.fmin` calls, compiled by the same
