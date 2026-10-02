@@ -57,6 +57,23 @@ jobs:
             END { exit bad }
           ' isa.txt
 
+      - name: Which part this runner is
+        run: |
+          model=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')
+          have() { grep -qw "$1" /proc/cpuinfo && echo yes || echo no; }
+          echo "AVX512F=$(have avx512f)" >> "$GITHUB_ENV"
+          {
+            echo "### Runner"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| cpu | $model |"
+            echo "| cores | $(nproc) |"
+            for f in avx2 avx512f avx512vl avx512dq avx512bw avx10; do
+              echo "| $f | $(have $f) |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Wall-clock
         run: |
           grep -q avx2 /proc/cpuinfo && cpu=x86-64-v3 || cpu=x86-64-v2
@@ -71,4 +88,45 @@ jobs:
             echo '```'
             echo
             echo 'Ratios here are noisier than the numbers in RESULTS.md, which come from a pinned core on an idle machine.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Only some of the hosted runners are AVX-512 parts. Where one turns up,
+      # take the measurement that no machine here can make.
+      - name: AVX-512, where the runner has it
+        if: env.AVX512F == 'yes'
+        run: |
+          ./bench.sh x86-64-v4
+          ./build/bench 16384 | tee bench512.txt
+          rustc --edition 2024 -O -C target-cpu=x86-64-v4 -o build/cand512 src/cand.rs
+          ./build/cand512 verify | tee verify512.txt
+          ./build/cand512 time 16384 | tee cand512.txt
+          {
+            echo
+            echo '### Wall-clock, `x86-64-v4`'
+            echo
+            echo '```'
+            cat bench512.txt
+            echo '```'
+            echo
+            echo 'Candidate sequences at the same level:'
+            echo
+            echo '```'
+            cat cand512.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Instruction counts at v4, where the runner has it
+        if: env.AVX512F == 'yes'
+        run: |
+          $LLC -mtriple=x86_64-unknown-linux-gnu -mcpu=x86-64-v4 -O3 src/minmax.ll -o build/v4.s
+          {
+            echo
+            echo '### `x86-64-v4` codegen'
+            echo
+            echo '```'
+            for f in f32_nsz f32_det v8f32_nsz v8f32_det; do
+              n=$(awk -v t="^$f:" '$0 ~ t { i = 1 } i && /^\t[a-z]/ { n++ } i && /cfi_endproc/ { exit } END { print n + 0 }' build/v4.s)
+              printf '%-12s %s instructions\n' "$f" "$n"
+            done
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
